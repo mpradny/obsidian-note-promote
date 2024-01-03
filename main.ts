@@ -104,6 +104,11 @@ export default class MyPlugin extends Plugin {
 	}
 
 	async promoteNote(file: TFile) {
+
+		// Check if we have embeds, so we need to move them too
+		const fileCache = this.app.metadataCache.getFileCache(file);
+		const hasEmbeds = (fileCache && fileCache.embeds)
+
 		// Extract the base name without the .md extension
 		const baseName = file.basename;
 
@@ -121,22 +126,30 @@ export default class MyPlugin extends Plugin {
 		// Construct the new path for the file
 		const newFilePath = newFolderPath + '/' + file.name;
 
-		
-		// we must get the attachment folder before moving
-		const attachmentsFolderPath = await this.getAvailablePathForAttachments("", "", file);
+		var attachmentsFolderPath = "";
+		if (hasEmbeds) {
+			// we must get the attachment folder before moving
+			attachmentsFolderPath = await this.getAvailablePathForAttachments("", "", file);
+		}
+
 		// Move the file to the new folder
 		await this.app.fileManager.renameFile(file, newFilePath);
-		const newFile = this.app.vault.getAbstractFileByPath(newFilePath);
-		debugger;
-		if (newFile instanceof TFile) {
-			await this.moveLinkedFiles(file, attachmentsFolderPath, newFile);
+
+		if (hasEmbeds) {
+			const newFile = this.app.vault.getAbstractFileByPath(newFilePath);			
+			if (newFile instanceof TFile) {
+				await this.moveLinkedFiles(file, attachmentsFolderPath, newFile);
+			}
+			new Notice(`${newFilePath}  created and images moved`);
+		} else {
+			new Notice(`${newFilePath}  created`);
 		}
-		new Notice(`${newFilePath}  created and images moved`);
+		
 	}
 
 	async moveLinkedFiles(oldFile: TFile, attachmentsFolderPath: string, newFile: TFile) {
 		// Retrieve the file cache for the note
-		const fileCache = this.app.metadataCache.getFileCache(oldFile);		
+		const fileCache = this.app.metadataCache.getFileCache(oldFile);
 		const newAttachmentsFolderPath = await this.getAvailablePathForAttachments("", "", newFile);
 		// Check if there are any links in the file cache
 		if (fileCache && fileCache.embeds) {
@@ -147,10 +160,10 @@ export default class MyPlugin extends Plugin {
 					const embedFilePath = embedFile.path;
 
 					// Check if the file is an image and in the 'images' subfolder
-					if (embedFilePath.startsWith(attachmentsFolderPath)) {						
+					if (embedFilePath.startsWith(attachmentsFolderPath)) {
 						const newImageFilePath = `${newAttachmentsFolderPath}${embedFile.name}`;
 						// Move the image file to the new folder
-						await this.app.fileManager.renameFile(embedFile, newImageFilePath);						
+						await this.app.fileManager.renameFile(embedFile, newImageFilePath);
 					}
 				}
 			}
