@@ -1,4 +1,4 @@
-import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
+import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting, TFile, TFolder } from 'obsidian';
 
 // Remember to rename these classes and interfaces!
 
@@ -15,6 +15,19 @@ export default class MyPlugin extends Plugin {
 
 	async onload() {
 		await this.loadSettings();
+
+		this.registerEvent(
+			this.app.workspace.on("file-menu", (menu, file) => {
+				if (file instanceof TFile && file.extension == "md") {
+					menu.addItem((item) => {
+						item
+							.setTitle("Promote Note to Folder")
+							.setIcon("folder")
+							.onClick(async () => this.promoteNote(file));
+					});
+				}
+			})
+		)
 
 		// This creates an icon in the left ribbon.
 		const ribbonIconEl = this.addRibbonIcon('dice', 'Sample Plugin', (evt: MouseEvent) => {
@@ -89,6 +102,30 @@ export default class MyPlugin extends Plugin {
 	async saveSettings() {
 		await this.saveData(this.settings);
 	}
+
+	async promoteNote(file: TFile) {
+		    // Extract the base name without the .md extension
+			const baseName = file.basename;
+
+			var newFolderPath;
+			// Construct the path for the new folder
+			if (file.parent) {
+				newFolderPath = file.parent.path + '/' + baseName;
+			} else {
+				newFolderPath = baseName;
+			}
+		
+			// Create the new folder
+			await this.app.vault.createFolder(newFolderPath);
+		
+			// Construct the new path for the file
+			const newFilePath = newFolderPath + '/' + file.name;
+		
+			// Move the file to the new folder
+			await this.app.fileManager.renameFile(file, newFilePath);
+
+			new Notice(newFilePath + " created");
+	}
 }
 
 class SampleModal extends Modal {
@@ -97,12 +134,12 @@ class SampleModal extends Modal {
 	}
 
 	onOpen() {
-		const {contentEl} = this;
+		const { contentEl } = this;
 		contentEl.setText('Woah!');
 	}
 
 	onClose() {
-		const {contentEl} = this;
+		const { contentEl } = this;
 		contentEl.empty();
 	}
 }
@@ -116,7 +153,7 @@ class SampleSettingTab extends PluginSettingTab {
 	}
 
 	display(): void {
-		const {containerEl} = this;
+		const { containerEl } = this;
 
 		containerEl.empty();
 
