@@ -141,6 +141,10 @@ export default class MyPlugin extends Plugin {
 				await this.moveLinkedFiles(file, attachmentsFolderPath, newFile);
 			}
 			new Notice(`${newFilePath}  created and images moved`);
+debugger;
+			if (await this.deleteIfEmpty(attachmentsFolderPath)) {
+				new Notice(`${attachmentsFolderPath}  folder deleted`);
+			}
 		} else {
 			new Notice(`${newFilePath}  created`);
 		}
@@ -168,6 +172,29 @@ export default class MyPlugin extends Plugin {
 				}
 			}
 		}
+	}
+
+	async deleteIfEmpty(folderPath: string): Promise<boolean> {
+		// Get the folder object
+		if (folderPath.endsWith('/')) {
+			folderPath = folderPath.slice(0, -1); 
+		}
+		const folder = this.app.vault.getAbstractFileByPath(folderPath);
+	
+		// Make sure it's a folder and not a file
+		if (folder instanceof TFolder) {
+			// Get the contents of the folder
+			const contents = folder.children;
+	
+			// If the folder is empty (no files or subfolders)
+			if (contents.length === 0) {
+				// Delete the folder
+				await this.app.vault.trash(folder, true);
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	/**
