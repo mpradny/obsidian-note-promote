@@ -104,28 +104,76 @@ export default class MyPlugin extends Plugin {
 	}
 
 	async promoteNote(file: TFile) {
-		    // Extract the base name without the .md extension
-			const baseName = file.basename;
+		// Extract the base name without the .md extension
+		const baseName = file.basename;
 
-			var newFolderPath;
-			// Construct the path for the new folder
-			if (file.parent) {
-				newFolderPath = file.parent.path + '/' + baseName;
-			} else {
-				newFolderPath = baseName;
-			}
-		
-			// Create the new folder
-			await this.app.vault.createFolder(newFolderPath);
-		
-			// Construct the new path for the file
-			const newFilePath = newFolderPath + '/' + file.name;
-		
-			// Move the file to the new folder
-			await this.app.fileManager.renameFile(file, newFilePath);
+		var newFolderPath: string;
+		// Construct the path for the new folder
+		if (file.parent) {
+			newFolderPath = file.parent.path + '/' + baseName;
+		} else {
+			newFolderPath = baseName;
+		}
 
-			new Notice(newFilePath + " created");
+		// Create the new folder
+		await this.app.vault.createFolder(newFolderPath);
+
+		// Construct the new path for the file
+		const newFilePath = newFolderPath + '/' + file.name;
+
+		
+		// we must get the attachment folder before moving
+		const attachmentsFolderPath = await this.getAvailablePathForAttachments("", "", file);
+		// Move the file to the new folder
+		await this.app.fileManager.renameFile(file, newFilePath);
+		const newFile = this.app.vault.getAbstractFileByPath(newFilePath);
+		debugger;
+		if (newFile instanceof TFile) {
+			await this.moveLinkedFiles(file, attachmentsFolderPath, newFile);
+		}
+		new Notice(`${newFilePath}  created and images moved`);
 	}
+
+	async moveLinkedFiles(oldFile: TFile, attachmentsFolderPath: string, newFile: TFile) {
+		// Retrieve the file cache for the note
+		const fileCache = this.app.metadataCache.getFileCache(oldFile);		
+		const newAttachmentsFolderPath = await this.getAvailablePathForAttachments("", "", newFile);
+		// Check if there are any links in the file cache
+		if (fileCache && fileCache.embeds) {
+			for (const embed of fileCache.embeds) {
+				// Construct the full path of the embedded file
+				const embedFile = this.app.metadataCache.getFirstLinkpathDest(embed.link, oldFile.path);
+				if (embedFile instanceof TFile) {
+					const embedFilePath = embedFile.path;
+
+					// Check if the file is an image and in the 'images' subfolder
+					if (embedFilePath.startsWith(attachmentsFolderPath)) {						
+						const newImageFilePath = `${newAttachmentsFolderPath}${embedFile.name}`;
+						// Move the image file to the new folder
+						await this.app.fileManager.renameFile(embedFile, newImageFilePath);						
+					}
+				}
+			}
+		}
+	}
+
+	/**
+ * This is a helper method for an undocumented API of Obsidian.
+ *
+ * @param fileName The Filename for your Attachment
+ * @param format The Fileformat of your Attachment
+ * @param sourceFile The Sourcefile from where the Attachment gets added, this is needed because the Attachment Folder might be different based on where it gets inserted.
+ * @returns The Attachment Path
+ */
+	async getAvailablePathForAttachments(
+		fileName: string,
+		format: string,
+		sourceFile: TFile
+	): Promise<string> {
+		//@ts-expect-error
+		return this.app.vault.getAvailablePathForAttachments(fileName, format, sourceFile);
+	}
+
 }
 
 class SampleModal extends Modal {
